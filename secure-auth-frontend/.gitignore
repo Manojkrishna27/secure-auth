@@ -12,11 +12,12 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Environment files
+# -------------------
+# Environment files (IMPORTANT)
+# -------------------
 .env
-.env.local
-.env.development
-.env.production
+.env.*
+!.env.example
 
 # -------------------
 # Python (Backend)
@@ -56,12 +57,10 @@ Thumbs.db
 *.sqlite3
 
 # -------------------
-# Uploads (Snapshots)
+# Uploads (Snapshots only)
 # -------------------
 uploads/
 snapshots/
-*.jpg
-*.png
 
 # -------------------
 # Misc
