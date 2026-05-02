@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { authAPI } from '../services/api';
 import Loader from '../components/ui/Loader';
-import { User, Shield, Activity, LogOut, AlertTriangle, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Shield, Users, AlertTriangle, CheckCircle, XCircle, Clock, RefreshCw } from 'lucide-react';
 import Button from '../components/ui/Button';
 
 // Helper: Parse user-agent to get device type
@@ -16,34 +16,41 @@ const getDeviceFromUA = (ua) => {
   return 'Desktop';
 };
 
-const Dashboard = () => {
+const Admin = () => {
   const { user, logout, loading } = useAuth();
   const [loginHistory, setLoginHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
 
-  // Fetch login history on mount
+  // Fetch login history
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await authAPI.loginHistory();
+      setLoginHistory(res.data.history || []);
+    } catch (err) {
+      console.error('Failed to fetch login history:', err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const res = await authAPI.loginHistory();
-        setLoginHistory(res.data.history || []);
-      } catch (err) {
-        console.error('Failed to fetch login history:', err);
-      } finally {
-        setHistoryLoading(false);
-      }
-    };
     fetchHistory();
   }, []);
 
-  // 🔄 Show loader while checking auth
-  if (loading) {
+  // Calculate stats
+  const totalAttempts = loginHistory.length;
+  const successfulLogins = loginHistory.filter(r => r.status === 'SUCCESS').length;
+  const failedLogins = loginHistory.filter(r => r.status === 'FAILED').length;
+  const uniqueUsers = [...new Set(loginHistory.map(r => r.email).filter(Boolean))].length;
+
+  if (loading || historyLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 flex items-center justify-center">
         <div className="text-center">
           <Loader size="xl" />
           <p className="mt-4 text-gray-600 font-medium">
-            Loading dashboard...
+            Loading admin panel...
           </p>
         </div>
       </div>
@@ -55,106 +62,131 @@ const Dashboard = () => {
       <div className="pt-4 pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
-          {/* Header */}
-          <div className="text-center mb-12">
-            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-4">
-              Dashboard
-            </h1>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Welcome back, {user?.name || user?.email}! 👋
-            </p>
+          {/* Admin Header */}
+          <div className="flex items-center justify-between mb-12">
+            <div>
+              <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-2">
+                Admin Panel
+              </h1>
+              <p className="text-xl text-gray-600">
+                Security Monitoring Dashboard
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="md"
+              onClick={fetchHistory}
+              className="px-4 py-2"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Refresh
+            </Button>
           </div>
 
-{/* Stats Cards */}
+          {/* Security Stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
 
-            {/* Account */}
-            <div className="bg-white/70 backdrop-blur-xl rounded-3xl p-8 border border-white/50 shadow-2xl hover:shadow-3xl transition-all duration-300 hover:-translate-y-2">
+            {/* Total Attempts */}
+            <div className="bg-white/70 backdrop-blur-xl rounded-3xl p-6 border border-white/50 shadow-2xl">
               <div className="flex items-center">
-                <div className="p-3 bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-2xl">
-                  <User className="w-8 h-8 text-white" />
+                <div className="p-3 bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-2xl">
+                  <Users className="w-6 h-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">
-                    Account
+                  <p className="text-sm font-medium text-gray-600 uppercase">
+                    Total Attempts
                   </p>
-                  <p className="text-3xl font-bold text-gray-900">
-                    {user?.email?.slice(0, 6) || 'ACTIVE'}
+                  <p className="text-2xl font-bold text-gray-900">
+                    {totalAttempts}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Security */}
-            <div className="bg-white/70 backdrop-blur-xl rounded-3xl p-8 border border-white/50 shadow-2xl hover:shadow-3xl transition-all duration-300 hover:-translate-y-2">
+            {/* Successful */}
+            <div className="bg-white/70 backdrop-blur-xl rounded-3xl p-6 border border-white/50 shadow-2xl">
               <div className="flex items-center">
-                <div className="p-3 bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl">
-                  <Shield className="w-8 h-8 text-white" />
+                <div className="p-3 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl">
+                  <CheckCircle className="w-6 h-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">
-                    Security
+                  <p className="text-sm font-medium text-gray-600 uppercase">
+                    Successful
                   </p>
-                  <p className="text-3xl font-bold text-emerald-500">
-                    VERIFIED
+                  <p className="text-2xl font-bold text-emerald-600">
+                    {successfulLogins}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Sessions */}
-            <div className="bg-white/70 backdrop-blur-xl rounded-3xl p-8 border border-white/50 shadow-2xl hover:shadow-3xl transition-all duration-300 hover:-translate-y-2">
+            {/* Failed (Suspicious) */}
+            <div className="bg-white/70 backdrop-blur-xl rounded-3xl p-6 border border-white/50 shadow-2xl">
+              <div className="flex items-center">
+                <div className="p-3 bg-gradient-to-r from-red-500 to-red-600 rounded-2xl">
+                  <AlertTriangle className="w-6 h-6 text-white" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600 uppercase">
+                    Suspicious
+                  </p>
+                  <p className="text-2xl font-bold text-red-600">
+                    {failedLogins}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Unique Users */}
+            <div className="bg-white/70 backdrop-blur-xl rounded-3xl p-6 border border-white/50 shadow-2xl">
               <div className="flex items-center">
                 <div className="p-3 bg-gradient-to-r from-purple-500 to-purple-600 rounded-2xl">
-                  <Activity className="w-8 h-8 text-white" />
+                  <Shield className="w-6 h-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">
-                    Sessions
+                  <p className="text-sm font-medium text-gray-600 uppercase">
+                    Unique Users
                   </p>
-                  <p className="text-3xl font-bold text-gray-900">
-                    Active
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Joined */}
-            <div className="bg-white/70 backdrop-blur-xl rounded-3xl p-8 border border-white/50 shadow-2xl hover:shadow-3xl transition-all duration-300 hover:-translate-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">
-                    Joined
-                  </p>
-                  <p className="text-3xl font-bold text-gray-900">
-                    {user?.createdAt
-                      ? new Date(user.createdAt).toLocaleDateString()
-                      : 'Recent'}
+                  <p className="text-2xl font-bold text-gray-900">
+                    {uniqueUsers}
                   </p>
                 </div>
-                <LogOut className="w-8 h-8 text-gray-400" />
               </div>
             </div>
           </div>
 
-          {/* Recent Login Activity */}
-          <div className="bg-white/70 backdrop-blur-xl rounded-3xl border border-white/50 shadow-2xl overflow-hidden mb-12">
-            <div className="p-6 border-b border-gray-100">
+          {/* Suspicious Activity Alert */}
+          {failedLogins > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-8 flex items-center">
+              <AlertTriangle className="w-6 h-6 text-red-500 mr-3" />
+              <div>
+                <p className="font-semibold text-red-700">
+                  {failedLogins} suspicious login attempt{failedLogins > 1 ? 's' : ''} detected
+                </p>
+                <p className="text-sm text-red-600">
+                  Review the failed attempts below for potential unauthorized access
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Login History Table */}
+          <div className="bg-white/70 backdrop-blur-xl rounded-3xl border border-white/50 shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
               <h2 className="text-2xl font-bold text-gray-900 flex items-center">
                 <Clock className="w-6 h-6 mr-2 text-indigo-600" />
-                Recent Login Activity
+                Login History
               </h2>
+              <span className="text-sm text-gray-500">
+                Latest 10 records
+              </span>
             </div>
 
-            {historyLoading ? (
-              <div className="p-12 text-center">
-                <Loader size="md" />
-              </div>
-            ) : loginHistory.length === 0 ? (
+            {loginHistory.length === 0 ? (
               <div className="p-12 text-center text-gray-500">
-                <Activity className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                <p className="text-lg font-medium">No login activity yet</p>
-                <p className="text-sm">Login events will appear here</p>
+                <Users className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                <p className="text-lg font-medium">No login history</p>
+                <p className="text-sm">Login attempts will appear here</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -183,7 +215,7 @@ const Dashboard = () => {
                       <tr
                         key={index}
                         className={`hover:bg-gray-50/50 transition-colors ${
-                          record.status === 'FAILED' ? 'bg-red-50/30' : 'bg-white'
+                          record.status === 'FAILED' ? 'bg-red-50/30' : ''
                         }`}
                       >
                         <td className="px-6 py-4">
@@ -227,16 +259,15 @@ const Dashboard = () => {
             )}
           </div>
 
-          {/* Logout */}
-          <div className="text-center">
+          {/* Back to Dashboard */}
+          <div className="text-center mt-8">
             <Button
               variant="outline"
-              size="lg"
+              size="md"
               onClick={logout}
-              className="px-8 py-3 text-lg font-semibold"
+              className="px-6 py-2"
             >
-              <LogOut className="w-5 h-5 mr-2" />
-              Sign Out Securely
+              Sign Out
             </Button>
           </div>
 
@@ -246,4 +277,4 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+export default Admin;

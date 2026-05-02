@@ -1,16 +1,18 @@
-import React, { createContext, useContext, useReducer } from 'react';
+import React, { createContext, useContext, useEffect, useReducer } from "react";
+import api from "../services/api";
+import { API_ENDPOINTS } from "../utils/constants";
 
 const AuthContext = createContext();
 
 const initialState = {
   user: null,
-  loading: false,
   isAuthenticated: false,
+  loading: true,
 };
 
-const authReducer = (state, action) => {
+const reducer = (state, action) => {
   switch (action.type) {
-    case 'LOGIN_SUCCESS':
+    case "SET_USER":
       return {
         ...state,
         user: action.payload,
@@ -18,9 +20,17 @@ const authReducer = (state, action) => {
         loading: false,
       };
 
-    case 'LOGOUT':
+    case "LOGOUT":
       return {
-        ...initialState,
+        user: null,
+        isAuthenticated: false,
+        loading: false,
+      };
+
+    case "SET_LOADING":
+      return {
+        ...state,
+        loading: true,
       };
 
     default:
@@ -29,52 +39,65 @@ const authReducer = (state, action) => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const [state, dispatch] = useReducer(authReducer, initialState);
+  const [state, dispatch] = useReducer(reducer, initialState);
 
-  // 🔐 MOCK LOGIN (NO BACKEND)
+  // 🔁 Check session on load
+  useEffect(() => {
+    const checkAuth = async () => {
+      dispatch({ type: "SET_LOADING" });
+      try {
+        const res = await api.get(API_ENDPOINTS.me);
+        dispatch({ type: "SET_USER", payload: res.data.user });
+      } catch {
+        dispatch({ type: "LOGOUT" });
+      }
+    };
+
+    checkAuth();
+  }, []);
+
+  // 🔐 LOGIN FUNCTION
   const login = async (credentials) => {
+    dispatch({ type: "SET_LOADING" });
     try {
-      // fake delay (optional)
-      await new Promise((res) => setTimeout(res, 500));
+      const res = await api.post(API_ENDPOINTS.login, credentials);
 
-      // fake user
-      const mockUser = {
-        email: credentials.email,
-        name: 'Demo User',
-        createdAt: new Date().toISOString(),
-      };
+      if (res.data.success) {
+        dispatch({ type: "SET_USER", payload: res.data.user });
+        return { success: true };
+      }
 
-      dispatch({ type: 'LOGIN_SUCCESS', payload: mockUser });
-
-      return { success: true };
+      return { success: false, message: res.data.message };
     } catch (error) {
-      return { success: false };
+      return { success: false, message: error.response?.data?.message || 'Login failed' };
     }
   };
 
-  // 🔓 MOCK LOGOUT
+  // 🔓 LOGOUT FUNCTION
   const logout = async () => {
-    dispatch({ type: 'LOGOUT' });
+    try {
+      await api.post(API_ENDPOINTS.logout || '/logout');
+    } catch (e) {
+      // Ignore logout errors
+    } finally {
+      dispatch({ type: "LOGOUT" });
+    }
   };
 
-  const value = {
-    ...state,
-    login,
-    logout,
-  };
-
+  // ✅ RETURN (ONLY UI HERE)
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider
+      value={{
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+        loading: state.loading,
+        login,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 };
 
-// Hook
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
-  return context;
-};
+export const useAuth = () => useContext(AuthContext);

@@ -1,104 +1,105 @@
-import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate, Link } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import * as yup from 'yup';
+import { authAPI } from '../services/api';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import Card from '../components/ui/Card';
+import Loader from '../components/ui/Loader';
+import { Lock, CheckCircle } from 'lucide-react';
+import { showSuccess, showError } from '../components/ToastProvider';
+
+const schema = yup.object({
+  password: yup.string().min(8, 'Password must be at least 8 characters').required('Password required'),
+  confirmPassword: yup.string().oneOf([yup.ref('password')], 'Passwords must match').required('Confirm password required'),
+});
 
 const ResetPassword = () => {
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-
+  const [email, setEmail] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
 
-  const email = location.state?.email;
-
-  // 🔒 Protect route
   useEffect(() => {
-    if (!email) {
+    const stateEmail = location.state?.email;
+    if (stateEmail) {
+      setEmail(stateEmail);
+    } else {
       navigate('/forgot-password');
     }
-  }, [email, navigate]);
+  }, [location.state?.email, navigate]);
 
-  const handleReset = (e) => {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    watch,
+    reset,
+  } = useForm({
+    resolver: yupResolver(schema),
+  });
 
-    if (password.length < 6) {
-      alert("Password must be at least 6 characters");
-      return;
+  const password = watch('password');
+
+  const onSubmit = async (data) => {
+    try {
+      const res = await authAPI.resetPassword({ email, ...data });
+      if (res.data.success) {
+        showSuccess('Password reset successful! You can now login.');
+        navigate('/login');
+      } else {
+        showError(res.data.message);
+      }
+    } catch (error) {
+      showError(error.response?.data?.message || 'Reset failed');
     }
-
-    if (password !== confirmPassword) {
-      alert("Passwords do not match");
-      return;
-    }
-
-    console.log("Password reset for:", email);
-
-    // 🔥 Mock success
-    alert("Password reset successful!");
-
-    navigate('/login');
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 to-indigo-200 px-4">
-
-      <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md">
-
-        {/* Header */}
-        <div className="text-center mb-6">
-          <img
-            src="/google-icon.png"
-            alt="Logo"
-            className="w-16 h-16 mx-auto mb-3"
-          />
-          <h2 className="text-2xl font-bold text-gray-800">
-            Reset Password
-          </h2>
-          <p className="text-gray-500 text-sm">
-            Create a new password for
-          </p>
-          <p className="text-blue-600 font-medium text-sm">
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 bg-gradient-to-br from-blue-50 to-indigo-100">
+      <Card className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="w-20 h-20 bg-gradient-to-r from-emerald-400 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl">
+            <CheckCircle className="w-10 h-10 text-white" />
+          </div>
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">Reset Password</h2>
+          <p className="text-gray-600 mb-2">Create your new password for</p>
+          <p className="text-blue-600 font-semibold bg-blue-50 px-3 py-1 rounded-full inline-block">
             {email}
           </p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleReset} className="space-y-5">
-
-          <input
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <Input
+            label="New Password"
             type="password"
-            placeholder="New Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+            error={errors.password?.message}
+            {...register('password')}
+            placeholder="At least 8 characters"
+            icon={<Lock className="w-5 h-5 text-gray-400" />}
           />
 
-          <input
+          <Input
+            label="Confirm Password"
             type="password"
-            placeholder="Confirm Password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+            error={errors.confirmPassword?.message}
+            {...register('confirmPassword')}
+            placeholder="Repeat new password"
+            icon={<Lock className="w-5 h-5 text-gray-400" />}
           />
 
-          <button
-            type="submit"
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl font-semibold transition duration-300"
-          >
+          <Button type="submit" className="w-full">
             Reset Password
-          </button>
+          </Button>
         </form>
 
-        {/* Back */}
         <div className="text-center mt-6">
-          <Link
-            to="/login"
-            className="text-sm text-gray-500 hover:underline"
-          >
+          <Link to="/login" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
             ← Back to Login
           </Link>
         </div>
-
-      </div>
+      </Card>
     </div>
   );
 };

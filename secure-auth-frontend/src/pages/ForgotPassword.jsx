@@ -1,71 +1,74 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React from 'react';
+import { useForm } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
+import { Link, useNavigate } from 'react-router-dom';
+import * as yup from 'yup';
+import { authAPI } from '../services/api';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import Card from '../components/ui/Card';
+import { Mail } from 'lucide-react';
+import { showSuccess, showError } from '../components/ToastProvider';
+import { MESSAGES } from '../utils/constants';
+
+const schema = yup.object({
+  email: yup.string().email('Invalid email').required('Email required'),
+});
 
 const ForgotPassword = () => {
-  const [email, setEmail] = useState('');
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    resolver: yupResolver(schema),
+  });
 
-    console.log("Mock OTP sent to:", email);
-
-    navigate('/verify-otp', {
-      state: { email },
-    });
+  const onSubmit = async (data) => {
+    try {
+      const res = await authAPI.forgotPassword(data);
+      if (res.data.success) {
+        showSuccess('OTP sent to your email!');
+        navigate('/verify-otp', { state: { email: data.email } });
+      } else {
+        showError(res.data.message);
+      }
+    } catch (error) {
+      showError(error.response?.data?.message || 'Failed to send OTP');
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 to-indigo-200 px-4">
-
-      <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md">
-
-        {/* Logo */}
-        <div className="text-center mb-6">
-          <img
-            src="/google-icon.png"
-            alt="Logo"
-            className="w-16 h-16 mx-auto mb-3"
-          />
-          <h2 className="text-2xl font-bold text-gray-800">
-            Forgot Password
-          </h2>
-          <p className="text-gray-500 text-sm">
-            Enter your email to receive OTP
-          </p>
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 bg-gradient-to-br from-blue-50 to-indigo-100">
+      <Card className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <img src="/google-icon.png" alt="Google" className="w-20 h-20 rounded-2xl shadow-2xl object-contain mx-auto mb-8" />
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">Forgot Password?</h2>
+          <p className="text-gray-600">Enter your email to receive OTP</p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-5">
-
-          <input
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <Input
+            label="Email"
             type="email"
-            placeholder="Enter your email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+            error={errors.email?.message}
+            {...register('email')}
+            icon={<Mail className="w-5 h-5 text-gray-400" />}
           />
 
-          <button
-            type="submit"
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl font-semibold transition duration-300"
-          >
+          <Button type="submit" loading={isSubmitting} className="w-full">
             Send OTP
-          </button>
+          </Button>
         </form>
 
-        {/* Back */}
         <div className="text-center mt-6">
-          <Link
-            to="/login"
-            className="text-blue-600 text-sm hover:underline"
-          >
+          <Link to="/login" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
             ← Back to Login
           </Link>
         </div>
-
-      </div>
+      </Card>
     </div>
   );
 };

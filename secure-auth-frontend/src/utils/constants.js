@@ -4,14 +4,14 @@ export const API_BASE_URL = 'http://localhost:5000';
 
 // Auth Endpoints
 export const API_ENDPOINTS = {
-login: '/login_verify',
+  login: '/login_verify',
   forgotPassword: '/send_otp',
   verifyOTP: '/verify_otp',
   resetPassword: '/reset_password',
   webcamSnapshot: '/send_snapshot_email',
   dashboard: '/user/dashboard',
-  me: '/me'
-
+  me: '/me',
+  loginHistory: '/login_history'
 };
 
 // Messages

