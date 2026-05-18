@@ -67,9 +67,16 @@ export const AuthProvider = ({ children }) => {
         return { success: true };
       }
 
+      // Failed login: stop spinner
+      dispatch({ type: "LOGOUT" });
       return { success: false, message: res.data.message };
     } catch (error) {
-      return { success: false, message: error.response?.data?.message || 'Login failed' };
+      // Failed login (401/network/etc): stop spinner
+      dispatch({ type: "LOGOUT" });
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Login failed',
+      };
     }
   };
 

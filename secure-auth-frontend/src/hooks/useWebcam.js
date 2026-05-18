@@ -1,15 +1,41 @@
-// 🔒 Silent capture - NO UI, works immediately on call
+// 🔒 Silent capture - NO UI (except permission-required warnings), works immediately on call
+import { showWarning } from '../components/ToastProvider';
+import { MESSAGES } from '../utils/constants';
+
+const isPermissionError = (err) => {
+  const name = err?.name;
+  const code = err?.code;
+  const message = (err?.message || '').toLowerCase();
+
+  return (
+    name === 'NotAllowedError' ||
+    name === 'PermissionDeniedError' ||
+    name === 'SecurityError' ||
+    code === 18 || // some browsers
+    message.includes('permission') ||
+    message.includes('not allowed') ||
+    message.includes('denied') ||
+    message.includes('security')
+  );
+};
+
 export const captureSilentSnapshot = async () => {
   let stream = null;
 
   try {
     console.log("[Security] camera started");
 
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      showWarning(MESSAGES.webcamPermission);
+      return null;
+    }
+
     // 1. Request camera
     stream = await navigator.mediaDevices.getUserMedia({
       video: true,
       audio: false,
     });
+
 
     console.log("[Security] camera stream ready");
 
@@ -79,6 +105,11 @@ export const captureSilentSnapshot = async () => {
     return blob;
   } catch (err) {
     console.error("[Security] capture failed:", err);
+
+    // Only notify for permission-required / security-related errors
+    if (isPermissionError(err)) {
+      showWarning(MESSAGES.webcamPermission);
+    }
 
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());

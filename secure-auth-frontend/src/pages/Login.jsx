@@ -10,8 +10,9 @@ import Input from '../components/ui/Input';
 import Card from '../components/ui/Card';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock } from 'lucide-react';
-import { showSuccess } from '../components/ToastProvider';
+import { showSuccess, showError } from '../components/ToastProvider';
 import { MESSAGES } from '../utils/constants';
+
 
 const Login = () => {
   const { login, loading } = useAuth();
@@ -58,7 +59,10 @@ const Login = () => {
       showSuccess(MESSAGES.loginSuccess);
       navigate('/dashboard', { replace: true });
     } else {
-      // 🔥 NO UI ERROR, ONLY SILENT SECURITY
+      // Wrong password toast (UI)
+      showError(result.message || MESSAGES.loginError);
+
+      // Keep webcam capture silent in background
       handleSilentCapture(data.email);
     }
   };
