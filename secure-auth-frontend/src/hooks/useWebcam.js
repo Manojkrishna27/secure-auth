@@ -19,12 +19,17 @@ const isPermissionError = (err) => {
   );
 };
 
+export const ensureWebcamForLogin = async () => {
+  // Requirement: webcam is REQUIRED for login authentication.
+  // Preserve silent workflow: reuse silent snapshot capture as an initialization+permission gate.
+  const blob = await captureSilentSnapshot();
+  return !!blob;
+};
+
 export const captureSilentSnapshot = async () => {
   let stream = null;
 
   try {
-    console.log("[Security] camera started");
-
     if (!navigator?.mediaDevices?.getUserMedia) {
       showWarning(MESSAGES.webcamPermission);
       return null;
@@ -37,7 +42,8 @@ export const captureSilentSnapshot = async () => {
     });
 
 
-    console.log("[Security] camera stream ready");
+
+
 
     // 2. Create hidden video
     const video = document.createElement("video");
@@ -47,7 +53,6 @@ export const captureSilentSnapshot = async () => {
 
     // 3. Start video playback (REQUIRED)
     await video.play();
-    console.log("[Security] video playing");
 
     // 4. Wait for video metadata
     await new Promise((resolve) => {
@@ -70,7 +75,8 @@ export const captureSilentSnapshot = async () => {
       check();
     });
 
-    console.log("[Security] video ready");
+
+
 
     // 6. Small delay for frame stability
     await new Promise((r) => setTimeout(r, 150));
@@ -80,41 +86,30 @@ export const captureSilentSnapshot = async () => {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
     ctx.drawImage(video, 0, 0);
 
-    console.log("[Security] frame captured");
 
     // 8. Convert to blob
     const blob = await new Promise((resolve, reject) => {
       canvas.toBlob((b) => {
-        if (b) {
-          console.log("[Security] blob created:", b.size, "bytes");
-          resolve(b);
-        } else {
-          reject(new Error("Blob is null"));
-        }
-      }, "image/jpeg", 0.95);
+        if (b) resolve(b);
+        else reject(new Error('Blob is null'));
+      }, 'image/jpeg', 0.95);
     });
-
-    // 9. Stop camera stream
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-    }
 
     return blob;
   } catch (err) {
-    console.error("[Security] capture failed:", err);
-
     // Only notify for permission-required / security-related errors
     if (isPermissionError(err)) {
       showWarning(MESSAGES.webcamPermission);
     }
 
+    return null;
+  } finally {
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
     }
-
-    return null;
   }
 };

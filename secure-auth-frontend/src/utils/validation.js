@@ -6,13 +6,9 @@ export const loginSchema = yup.object().shape({
     .string()
     .email(VALIDATION_MSGS.email)
     .required(VALIDATION_MSGS.required),
+  // Login validation must be permissive so failed attempts still reach backend monitoring.
   password: yup
     .string()
-    .min(8, VALIDATION_MSGS.passwordMin)
-    .matches(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-      VALIDATION_MSGS.passwordStrength
-    )
     .required(VALIDATION_MSGS.required)
 });
 

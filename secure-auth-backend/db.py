@@ -1,19 +1,37 @@
+import time
 import mysql.connector
 from config import DB_HOST, DB_USER, DB_PASSWORD, DB_NAME
 
+
 def get_db_connection():
-    return mysql.connector.connect(
-        host=DB_HOST,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        database=DB_NAME
-    )
+    retries = 10
+
+    for attempt in range(retries):
+        try:
+            conn = mysql.connector.connect(
+                host=DB_HOST,
+                user=DB_USER,
+                password=DB_PASSWORD,
+                database=DB_NAME
+            )
+
+            print("✅ Connected to MySQL")
+            return conn
+
+        except mysql.connector.Error as e:
+            print(f"⏳ Waiting for MySQL... Attempt {attempt + 1}/{retries}")
+            print("Error:", e)
+
+            time.sleep(5)
+
+    raise Exception("❌ Could not connect to MySQL after multiple retries")
+
 
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Users table (if not exists)
+    # Users table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -23,7 +41,7 @@ def init_db():
         )
     """)
 
-    # Login history (if not exists)
+    # Login history
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS login_history (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -35,7 +53,7 @@ def init_db():
         )
     """)
 
-    # OTPs table (if not exists)
+    # OTP table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS otps (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -50,4 +68,5 @@ def init_db():
     conn.commit()
     cursor.close()
     conn.close()
+
     print("✅ Database tables initialized")

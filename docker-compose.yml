@@ -1,0 +1,75 @@
+services:
+  backend:
+    build:
+      context: ./secure-auth-backend
+
+    container_name: secure-auth-backend
+
+    env_file:
+      - ./secure-auth-backend/.env
+
+    environment:
+      DB_HOST: mysql
+
+    ports:
+      - "5000:5000"
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    networks:
+      - secure-auth
+
+  frontend:
+    build:
+      context: ./secure-auth-frontend
+
+    container_name: secure-auth-frontend
+
+    environment:
+      REACT_APP_API_URL: http://backend:5000
+
+    ports:
+      - "3000:3000"
+
+    depends_on:
+      - backend
+
+    networks:
+      - secure-auth
+
+  mysql:
+    image: mysql:8.0
+
+    container_name: secure-auth-mysql
+
+    command: ["--default-authentication-plugin=mysql_native_password"]
+
+    restart: unless-stopped
+
+    environment:
+      MYSQL_DATABASE: secure_auth
+      MYSQL_ROOT_PASSWORD: root123
+
+    ports:
+      - "3307:3306"
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    volumes:
+      - secureauth-mysql-data:/var/lib/mysql
+
+    networks:
+      - secure-auth
+
+volumes:
+  secureauth-mysql-data:
+
+networks:
+  secure-auth:
+    driver: bridge
