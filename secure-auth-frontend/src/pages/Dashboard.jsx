@@ -61,7 +61,7 @@ const Dashboard = () => {
               Dashboard
             </h1>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Welcome back, {user?.name || user?.email}! 👋
+              Welcome back, {user?.email}! 👋
             </p>
           </div>
 
@@ -79,7 +79,7 @@ const Dashboard = () => {
                     Account
                   </p>
                   <p className="text-3xl font-bold text-gray-900">
-                    {user?.email?.slice(0, 6) || 'ACTIVE'}
+                    {user?.name || user?.email || 'User'}
                   </p>
                 </div>
               </div>
@@ -96,7 +96,7 @@ const Dashboard = () => {
                     Security
                   </p>
                   <p className="text-3xl font-bold text-emerald-500">
-                    VERIFIED
+                    SECURE
                   </p>
                 </div>
               </div>
@@ -127,9 +127,9 @@ const Dashboard = () => {
                     Joined
                   </p>
                   <p className="text-3xl font-bold text-gray-900">
-                    {user?.createdAt
-                      ? new Date(user.createdAt).toLocaleDateString()
-                      : 'Recent'}
+                    {user?.created_at
+                      ? `Joined ${new Date(user.created_at).toLocaleString('en-US', { month: 'short', year: 'numeric' }).replace(' ', ' ')}`
+                      : 'Joined'}
                   </p>
                 </div>
                 <LogOut className="w-8 h-8 text-gray-400" />

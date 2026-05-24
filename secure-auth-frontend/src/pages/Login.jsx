@@ -206,9 +206,19 @@ const Login = () => {
               Forgot your password?
             </Link>
 
+            <div className="mt-4">
+              <Link
+                to="/register"
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Don’t have an account? Sign Up
+              </Link>
+            </div>
+
           </div>
 
         </form>
+
 
       </Card>
 

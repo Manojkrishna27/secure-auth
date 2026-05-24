@@ -6,6 +6,7 @@ const AuthContext = createContext();
 
 const initialState = {
   user: null,
+  is_admin: false,
   isAuthenticated: false,
   loading: true,
 };
@@ -15,7 +16,8 @@ const reducer = (state, action) => {
     case "SET_USER":
       return {
         ...state,
-        user: action.payload,
+        user: action.payload.user,
+        is_admin: action.payload.is_admin === true,
         isAuthenticated: true,
         loading: false,
       };
@@ -23,6 +25,7 @@ const reducer = (state, action) => {
     case "LOGOUT":
       return {
         user: null,
+        is_admin: false,
         isAuthenticated: false,
         loading: false,
       };
@@ -47,7 +50,7 @@ export const AuthProvider = ({ children }) => {
       dispatch({ type: "SET_LOADING" });
       try {
         const res = await api.get(API_ENDPOINTS.me);
-        dispatch({ type: "SET_USER", payload: res.data.user });
+        dispatch({ type: "SET_USER", payload: res.data });
       } catch {
         dispatch({ type: "LOGOUT" });
       }
@@ -63,7 +66,7 @@ export const AuthProvider = ({ children }) => {
       const res = await api.post(API_ENDPOINTS.login, credentials);
 
       if (res.data.success) {
-        dispatch({ type: "SET_USER", payload: res.data.user });
+        dispatch({ type: "SET_USER", payload: res.data });
         return { success: true };
       }
 
@@ -97,6 +100,7 @@ export const AuthProvider = ({ children }) => {
       value={{
         user: state.user,
         isAuthenticated: state.isAuthenticated,
+        is_admin: state.is_admin,
         loading: state.loading,
         login,
         logout,

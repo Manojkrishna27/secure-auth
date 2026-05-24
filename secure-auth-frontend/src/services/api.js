@@ -45,6 +45,10 @@ export const authAPI = {
   // Login
   login: (data) => api.post(API_ENDPOINTS.login, data),
 
+  // Register
+  register: (data) => api.post(API_ENDPOINTS.register, data),
+
+
   // Logout
   logout: () => api.post('/logout'),
 
@@ -78,7 +82,7 @@ export const authAPI = {
   },
 
   // 📊 Login History
-  loginHistory: () => api.get(API_ENDPOINTS.loginHistory),
+  loginHistory: (params) => api.get(API_ENDPOINTS.loginHistory, { params }),
 };
 
 export default api;

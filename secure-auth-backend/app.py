@@ -56,6 +56,85 @@ def test_db():
 
 
 # -----------------------------------
+# REGISTER API
+# -----------------------------------
+@app.route("/register", methods=["POST"])
+def register():
+
+    data = request.get_json() or {}
+
+    name = data.get("name")
+    email = data.get("email")
+    password = data.get("password")
+
+    # Basic field validation
+    if not name or not email or not password:
+        return jsonify({
+            "success": False,
+            "message": "All fields are required"
+        }), 400
+
+    # Email format validation (simple)
+    if "@" not in email or "." not in email:
+        return jsonify({
+            "success": False,
+            "message": "Invalid email format"
+        }), 400
+
+    # Password length validation
+    if len(password) < 8:
+        return jsonify({
+            "success": False,
+            "message": "Password must be at least 8 characters"
+        }), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Check if user exists
+    cursor.execute(
+        "SELECT * FROM users WHERE email=%s",
+        (email,)
+    )
+
+    user = cursor.fetchone()
+
+    if user:
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "success": False,
+            "message": "User already exists"
+        }), 409
+
+    # Hash password
+    hashed_password = bcrypt.hashpw(
+        password.encode("utf-8"),
+        bcrypt.gensalt()
+    ).decode("utf-8")
+
+    # Insert user
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO users (name, email, phone, password)
+        VALUES (%s, %s, %s, %s)
+        """,
+        (name, email, None, hashed_password)
+    )
+
+    conn.commit()
+
+    cursor.close()
+    conn.close()
+
+    return jsonify({
+        "success": True,
+        "message": "Registration successful"
+    }), 200
+
+
+# -----------------------------------
 # LOGIN API
 # -----------------------------------
 @app.route("/login_verify", methods=["POST"])
@@ -192,13 +271,26 @@ def get_me():
             algorithms=["HS256"]
         )
 
-        email = decoded["email"]
+        email = decoded.get("email")
+
+        if not email:
+            return jsonify({
+                "message": "Invalid token"
+            }), 401
 
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
         cursor.execute(
-            "SELECT email FROM users WHERE email=%s",
+            """
+            SELECT
+                id,
+                name,
+                email,
+                created_at
+            FROM users
+            WHERE email=%s
+            """,
             (email,)
         )
 
@@ -212,8 +304,17 @@ def get_me():
                 "message": "User not found"
             }), 404
 
+        admin_email = os.getenv("ADMIN_EMAIL")
+        is_admin = user.get("email") == admin_email
+
         return jsonify({
-            "user": user
+            "user": {
+                "id": user.get("id"),
+                "name": user.get("name"),
+                "email": user.get("email"),
+                "created_at": user.get("created_at"),
+            },
+            "is_admin": is_admin
         })
 
     except jwt.ExpiredSignatureError:
@@ -229,6 +330,7 @@ def get_me():
         return jsonify({
             "message": "Invalid token"
         }), 401
+
 
 
 # -----------------------------------
@@ -652,11 +754,17 @@ def login_history():
 
     try:
 
-        jwt.decode(
+        decoded = jwt.decode(
             token,
             JWT_SECRET,
             algorithms=["HS256"]
         )
+
+        email = decoded.get("email")
+        if not email:
+            return jsonify({
+                "message": "Invalid token"
+            }), 401
 
     except Exception as e:
 
@@ -669,17 +777,48 @@ def login_history():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    cursor.execute("""
-        SELECT
-            email,
-            login_time,
-            status,
-            ip_address,
-            user_agent
-        FROM login_history
-        ORDER BY login_time DESC
-        LIMIT 10
-    """)
+    admin_email = os.getenv("ADMIN_EMAIL")
+    is_admin = email == admin_email
+
+    # Admin-only global endpoint
+    # Even if someone manually calls /login_history?admin=1, it must be authenticated + admin.
+    if request.args.get("admin") == "1" and is_admin:
+        cursor.execute(
+            """
+            SELECT
+                email,
+                login_time,
+                status,
+                ip_address,
+                user_agent
+            FROM login_history
+            ORDER BY login_time DESC
+            LIMIT 10
+            """
+        )
+    elif request.args.get("admin") == "1" and not is_admin:
+        return jsonify({
+            "success": False,
+            "message": "Unauthorized"
+        }), 403
+    else:
+        cursor.execute(
+            """
+            SELECT
+                email,
+                login_time,
+                status,
+                ip_address,
+                user_agent
+            FROM login_history
+            WHERE email=%s
+            ORDER BY login_time DESC
+            LIMIT 10
+            """,
+            (email,)
+        )
+
+
 
     records = cursor.fetchall()
 
@@ -714,3 +853,4 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=5000
     )
+

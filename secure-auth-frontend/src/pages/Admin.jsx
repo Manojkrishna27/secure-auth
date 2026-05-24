@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { authAPI } from '../services/api';
 import Loader from '../components/ui/Loader';
@@ -17,7 +18,16 @@ const getDeviceFromUA = (ua) => {
 };
 
 const Admin = () => {
-  const { user, logout, loading } = useAuth();
+  const { user, is_admin, logout, loading } = useAuth();
+
+  if (loading) {
+    return null;
+  }
+
+  if (is_admin !== true) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   const [loginHistory, setLoginHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
 
@@ -25,7 +35,7 @@ const Admin = () => {
   const fetchHistory = async () => {
     setHistoryLoading(true);
     try {
-      const res = await authAPI.loginHistory();
+      const res = await authAPI.loginHistory({ admin: 1 });
       setLoginHistory(res.data.history || []);
     } catch (err) {
       console.error('Failed to fetch login history:', err);
@@ -35,8 +45,10 @@ const Admin = () => {
   };
 
   useEffect(() => {
-    fetchHistory();
-  }, []);
+    if (is_admin === true) {
+      fetchHistory();
+    }
+  }, [is_admin]);
 
   // Calculate stats
   const totalAttempts = loginHistory.length;

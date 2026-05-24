@@ -31,15 +31,33 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Users table
+    # Users table (required structure)
+    # Note: project may already have an older users table; we attempt safe ALTERs.
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255),
             email VARCHAR(255) UNIQUE NOT NULL,
+            phone VARCHAR(20) NULL,
             password VARCHAR(255) NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    # Add missing columns if table existed previously with a smaller schema.
+    cursor.execute("SHOW COLUMNS FROM users LIKE 'name'")
+    if cursor.fetchone() is None:
+        cursor.execute("ALTER TABLE users ADD COLUMN name VARCHAR(255) NULL")
+
+    cursor.execute("SHOW COLUMNS FROM users LIKE 'phone'")
+    if cursor.fetchone() is None:
+        cursor.execute("ALTER TABLE users ADD COLUMN phone VARCHAR(20) NULL")
+
+    # Ensure password column exists (older schema already has it, but keep defensive).
+    cursor.execute("SHOW COLUMNS FROM users LIKE 'password'")
+    if cursor.fetchone() is None:
+        cursor.execute("ALTER TABLE users ADD COLUMN password VARCHAR(255) NOT NULL")
+
 
     # Login history
     cursor.execute("""

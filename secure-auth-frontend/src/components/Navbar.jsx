@@ -3,7 +3,7 @@ import { LogOut, User, Shield, LayoutDashboard } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 
 const Navbar = () => {
-  const { user, logout } = useAuth();
+  const { user, is_admin, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -29,7 +29,7 @@ const Navbar = () => {
           </Link>
 
           {/* Navigation Links - Only show when logged in */}
-          {user && (
+          {user && is_admin === true && (
             <div className="flex items-center space-x-2">
               <Link
                 to="/dashboard"
@@ -67,7 +67,7 @@ const Navbar = () => {
                   <p className="text-sm font-semibold text-gray-900">
                     {user.name || user.email?.split('@')[0] || 'User'}
                   </p>
-                  <p className="text-xs text-gray-500">Admin</p>
+                  <p className="text-xs text-gray-500">{is_admin === true ? 'Admin' : 'User'}</p>
                 </div>
               </div>
               <button

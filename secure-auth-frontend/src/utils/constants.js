@@ -5,6 +5,7 @@ export const API_BASE_URL = 'http://localhost:5000';
 // Auth Endpoints
 export const API_ENDPOINTS = {
   login: '/login_verify',
+  register: '/register',
   forgotPassword: '/send_otp',
   verifyOTP: '/verify_otp',
   resetPassword: '/reset_password',
@@ -18,6 +19,9 @@ export const API_ENDPOINTS = {
 export const MESSAGES = {
   loginSuccess: 'Login successful! Welcome back.',
   loginError: 'Invalid credentials. Please try again.',
+  registerSuccess: 'Registration successful. You can now sign in.',
+  registerError: 'Registration failed. Please try again.',
+
   forgotSuccess: 'Password reset link sent to your email.',
   otpSuccess: 'OTP verified successfully!',
   resetSuccess: 'Password reset successful. Please login again.',

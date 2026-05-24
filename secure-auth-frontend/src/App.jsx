@@ -11,13 +11,16 @@ import VerifyOTP from './pages/VerifyOTP';
 import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import Admin from './pages/Admin';
+import Register from './pages/Register';
 import './App.css';
+
 
 function AppContent() {
   const location = useLocation();
 
   // Hide navbar on auth pages
-const noNavbar = ['/', '/login', '/forgot-password', '/verify-otp', '/reset-password'].includes(location.pathname);
+const noNavbar = ['/', '/login', '/register', '/forgot-password', '/verify-otp', '/reset-password'].includes(location.pathname);
+
 
   return (
     <ErrorBoundary>
@@ -28,7 +31,9 @@ const noNavbar = ['/', '/login', '/forgot-password', '/verify-otp', '/reset-pass
           <Routes>
             <Route path="/" element={<Login />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
+
             <Route path="/verify-otp" element={<VerifyOTP />} />
             <Route path="/reset-password" element={<ResetPassword />} />
 <Route 
