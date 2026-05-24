@@ -68,4 +68,5 @@ snapshots/
 # Misc
 # -------------------
 coverage/
-*.log
+*.log__pycache__/
+*.pyc
