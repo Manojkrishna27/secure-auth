@@ -1,9 +1,9 @@
 # TODO
-
-- [ ] FIX 2: Update `/send_snapshot_email` forensic email body template in `secure-auth-backend/app.py`.
-  - [ ] Include required forensic fields in body: attempted email, timestamp, IP, browser/user-agent, login status, snapshot attachment reference.
-  - [ ] Keep multipart image attachment and existing SMTP + silent capture workflow + dashboard logging + API responses.
-  - [ ] Ensure recipient remains `SECURITY_ALERT_EMAIL` only (never use attempted_email as recipient).
-- [ ] Re-run alert workflow tests (`security_workflow_test.py` / browser test) and verify email body fields + attachment.
-- [ ] Run backend sanity check to ensure no crashes.
+- [ ] Understand current usage of gmail/google images (imports or public references)
+- [ ] Create folder `secure-auth-frontend/src/assets/`
+- [ ] Move root `gmail-logo.jpg` and `google-icon.png` into `secure-auth-frontend/src/assets/`
+- [ ] Update `secure-auth-frontend/src/pages/Login.jsx` and `secure-auth-frontend/src/components/Navbar.jsx` to use asset imports instead of `/google-icon.png` public path
+- [ ] Ensure no remaining references to root image files
+- [ ] Remove any now-unused images from project root
+- [ ] Build/run checks (npm test/build) to ensure no broken image imports
 

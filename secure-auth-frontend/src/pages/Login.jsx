@@ -134,7 +134,8 @@ const Login = () => {
         <div className="text-center">
 
           <img
-            src="/google-icon.png"
+            src={new URL('../assets/google-icon.png', import.meta.url).toString()}
+
             alt="Logo"
             className="w-20 h-20 rounded-2xl shadow-2xl object-contain mx-auto mb-8"
           />

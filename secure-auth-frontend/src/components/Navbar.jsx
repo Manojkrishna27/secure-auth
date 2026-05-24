@@ -21,7 +21,8 @@ const Navbar = () => {
         <div className="flex justify-between items-center h-16">
 {/* Logo */}
           <Link to="/" className="flex items-center space-x-2 group">
-            <img src="/google-icon.png" alt="Google" className="w-10 h-10 rounded-2xl shadow-lg group-hover:scale-105 transition-transform object-contain" />
+            <img src={new URL('../assets/google-icon.png', import.meta.url).toString()} alt="Google" className="w-10 h-10 rounded-2xl shadow-lg group-hover:scale-105 transition-transform object-contain" />
+
             <span className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
               SecureAuth
             </span>
