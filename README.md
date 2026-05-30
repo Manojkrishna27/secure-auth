@@ -83,7 +83,7 @@ SecureAuth combines modern authentication mechanisms with real-time security mon
 
 ---
 
-## 🏗 Architecture Diagram
+
 
 <h2 align="center">🏗 Architecture Diagram</h2>
 
@@ -93,7 +93,7 @@ SecureAuth combines modern authentication mechanisms with real-time security mon
 
 ---
 
-## 👤 User Workflow Diagram
+
 
 <h2 align="center">👤 User Workflow Diagram</h2>
 
