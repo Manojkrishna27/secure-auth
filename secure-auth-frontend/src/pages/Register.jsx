@@ -58,7 +58,7 @@ const Register = () => {
           <img
             src={new URL('../assets/google-icon.png', import.meta.url).toString()}
             alt="Logo"
-            className="w-20 h-20 rounded-2xl shadow-2xl object-contain mx-auto mb-6"
+            className="w-20 h-20 rounded-full shadow-md object-cover mx-auto mb-6"
           />
 
           <h2 className="text-3xl font-bold text-gray-900 mb-2">Create your account</h2>
