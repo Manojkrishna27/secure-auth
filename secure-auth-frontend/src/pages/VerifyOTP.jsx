@@ -45,7 +45,9 @@ const VerifyOTP = () => {
       const res = await authAPI.verifyOTP({ email, ...data });
       if (res.data.success) {
         showSuccess('OTP verified successfully!');
-        navigate('/reset-password', { state: { email } });
+        navigate('/reset-password', {
+          state: { email, reset_token: res.data.reset_token },
+        });
       } else {
         showError(res.data.message);
         reset();

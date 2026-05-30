@@ -1,19 +1,71 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, g
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import bcrypt
 import jwt
 import secrets
 import smtplib
 import os
+from functools import wraps
 
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from db import get_db_connection, init_db
-from config import JWT_SECRET, SMTP_USER, SMTP_PASS
+from config import JWT_SECRET, SMTP_USER, SMTP_PASS, COOKIE_SECURE
+
+
+# -----------------------------------
+# CONSTANTS
+# -----------------------------------
+INVALID_CREDENTIALS_MSG = "Invalid email or password"
+RATE_LIMIT_MSG = {
+    "success": False,
+    "message": "Too many requests. Please try again later."
+}
+
+
+# -----------------------------------
+# UTC / EMAIL HELPERS
+# -----------------------------------
+def utc_now():
+    """Naive UTC datetime for MySQL DATETIME storage and comparison."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def utc_expires(minutes):
+    return utc_now() + timedelta(minutes=minutes)
+
+
+def utc_exp_timestamp(minutes):
+    return int((datetime.now(timezone.utc) + timedelta(minutes=minutes)).timestamp())
+
+
+def normalize_email(email):
+    if not email:
+        return email
+    return email.strip().lower()
+
+
+def as_utc_naive(value):
+    if value is None:
+        return None
+    if not isinstance(value, datetime):
+        return value
+    if value.tzinfo is not None:
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
+
+
+def encode_jwt(payload):
+    token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+    if isinstance(token, bytes):
+        return token.decode("utf-8")
+    return token
 
 
 # -----------------------------------
@@ -23,6 +75,233 @@ app = Flask(__name__)
 
 # Enable CORS
 CORS(app, supports_credentials=True)
+
+# Rate limiting
+limiter = Limiter(
+    key_func=get_remote_address,
+    app=app,
+    default_limits=[],
+    storage_uri="memory://"
+)
+
+
+@app.errorhandler(429)
+def rate_limit_handler(e):
+    return jsonify(RATE_LIMIT_MSG), 429
+
+
+# -----------------------------------
+# COOKIE HELPERS
+# -----------------------------------
+def set_auth_cookie(response, token):
+    response.set_cookie(
+        "token",
+        token,
+        httponly=True,
+        samesite="Lax",
+        secure=COOKIE_SECURE,
+        path="/"
+    )
+
+
+def clear_auth_cookie(response):
+    response.set_cookie(
+        "token",
+        "",
+        expires=0,
+        httponly=True,
+        samesite="Lax",
+        secure=COOKIE_SECURE,
+        path="/"
+    )
+
+
+# -----------------------------------
+# ONE-TIME TOKEN HELPERS
+# -----------------------------------
+def generate_one_time_token(email, token_type, expiry_minutes=10):
+    email = normalize_email(email)
+    jti = secrets.token_urlsafe(32)
+    expires_at = utc_expires(expiry_minutes)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO one_time_tokens (jti, email, token_type, expires_at)
+        VALUES (%s, %s, %s, %s)
+        """,
+        (jti, email, token_type, expires_at)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return encode_jwt(
+        {
+            "email": email,
+            "type": token_type,
+            "jti": jti,
+            "exp": utc_exp_timestamp(expiry_minutes)
+        }
+    )
+
+
+def validate_one_time_token(token, token_type, expected_email=None, consume=False):
+    if not token:
+        return False, "Token required", None
+
+    try:
+        decoded = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        return False, "Token expired", None
+    except Exception:
+        return False, "Invalid token", None
+
+    if decoded.get("type") != token_type:
+        return False, "Invalid token type", None
+
+    email = normalize_email(decoded.get("email"))
+    jti = decoded.get("jti")
+
+    if not email or not jti:
+        return False, "Invalid token", None
+
+    if expected_email:
+        expected_email = normalize_email(expected_email)
+        if email != expected_email:
+            return False, "Token email mismatch", None
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        """
+        SELECT *
+        FROM one_time_tokens
+        WHERE jti=%s AND token_type=%s AND is_used=FALSE
+        """,
+        (jti, token_type)
+    )
+    record = cursor.fetchone()
+
+    if not record:
+        cursor.close()
+        conn.close()
+        return False, "Token invalid or already used", None
+
+    expires_at = as_utc_naive(record["expires_at"])
+    if utc_now() > expires_at:
+        cursor.close()
+        conn.close()
+        return False, "Token expired", None
+
+    if normalize_email(record["email"]) != email:
+        cursor.close()
+        conn.close()
+        return False, "Token email mismatch", None
+
+    if consume:
+        cursor.execute(
+            "UPDATE one_time_tokens SET is_used=TRUE WHERE jti=%s",
+            (jti,)
+        )
+        conn.commit()
+
+    cursor.close()
+    conn.close()
+    return True, email, jti
+
+
+def consume_one_time_token(jti):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE one_time_tokens SET is_used=TRUE WHERE jti=%s AND is_used=FALSE",
+        (jti,)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+# -----------------------------------
+# JWT DECORATORS
+# -----------------------------------
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.cookies.get("token")
+
+        if not token:
+            return jsonify({"message": "Unauthorized"}), 401
+
+        try:
+            decoded = jwt.decode(
+                token,
+                JWT_SECRET,
+                algorithms=["HS256"]
+            )
+            email = decoded.get("email")
+
+            if not email:
+                return jsonify({"message": "Invalid token"}), 401
+
+            g.current_user_email = email
+
+        except jwt.ExpiredSignatureError:
+            return jsonify({"message": "Token expired"}), 401
+
+        except Exception as e:
+            print("Error:", e)
+            return jsonify({"message": "Invalid token"}), 401
+
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+def admin_required(f):
+    @wraps(f)
+    @login_required
+    def decorated(*args, **kwargs):
+        admin_email = os.getenv("ADMIN_EMAIL")
+        if g.current_user_email != admin_email:
+            return jsonify({
+                "success": False,
+                "message": "Unauthorized"
+            }), 403
+        g.is_admin = True
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+# -----------------------------------
+# LOGIN FAILURE HELPER
+# -----------------------------------
+def log_failed_login(cursor, conn, email, ip_address, user_agent):
+    cursor.execute(
+        """
+        INSERT INTO login_history
+        (email, login_time, status, ip_address, user_agent)
+        VALUES (%s, NOW(), 'FAILED', %s, %s)
+        """,
+        (email, ip_address, user_agent)
+    )
+    conn.commit()
+
+
+def failed_login_response(email):
+    security_token = generate_one_time_token(
+        normalize_email(email),
+        "security_snapshot",
+        expiry_minutes=10
+    )
+    return jsonify({
+        "success": False,
+        "message": INVALID_CREDENTIALS_MSG,
+        "security_token": security_token
+    }), 401
 
 
 # -----------------------------------
@@ -59,6 +338,7 @@ def test_db():
 # REGISTER API
 # -----------------------------------
 @app.route("/register", methods=["POST"])
+@limiter.limit("3 per hour")
 def register():
 
     data = request.get_json() or {}
@@ -138,12 +418,19 @@ def register():
 # LOGIN API
 # -----------------------------------
 @app.route("/login_verify", methods=["POST"])
+@limiter.limit("5 per minute")
 def login_verify():
 
-    data = request.get_json()
+    data = request.get_json() or {}
 
-    email = data.get("email")
+    email = normalize_email(data.get("email"))
     password = data.get("password")
+
+    if not email or not password:
+        return jsonify({
+            "success": False,
+            "message": INVALID_CREDENTIALS_MSG
+        }), 401
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -160,52 +447,20 @@ def login_verify():
 
     # USER NOT FOUND
     if not user:
-
-        cursor.execute(
-            """
-            INSERT INTO login_history
-            (email, login_time, status, ip_address, user_agent)
-            VALUES (%s, NOW(), 'FAILED', %s, %s)
-            """,
-            (email, ip_address, user_agent)
-        )
-
-        conn.commit()
-
+        log_failed_login(cursor, conn, email, ip_address, user_agent)
         cursor.close()
         conn.close()
-
-        return jsonify({
-            "success": False,
-            "message": "User not found"
-        }), 401
-
+        return failed_login_response(email)
 
     # WRONG PASSWORD
     if not bcrypt.checkpw(
         password.encode("utf-8"),
         user["password"].encode("utf-8")
     ):
-
-        cursor.execute(
-            """
-            INSERT INTO login_history
-            (email, login_time, status, ip_address, user_agent)
-            VALUES (%s, NOW(), 'FAILED', %s, %s)
-            """,
-            (email, ip_address, user_agent)
-        )
-
-        conn.commit()
-
+        log_failed_login(cursor, conn, email, ip_address, user_agent)
         cursor.close()
         conn.close()
-
-        return jsonify({
-            "success": False,
-            "message": "Wrong password"
-        }), 401
-
+        return failed_login_response(email)
 
     # SUCCESS LOGIN
     cursor.execute(
@@ -220,13 +475,11 @@ def login_verify():
     conn.commit()
 
     # CREATE JWT
-    token = jwt.encode(
+    token = encode_jwt(
         {
             "email": user["email"],
-            "exp": datetime.utcnow() + timedelta(hours=2)
-        },
-        JWT_SECRET,
-        algorithm="HS256"
+            "exp": utc_exp_timestamp(120)
+        }
     )
 
     cursor.close()
@@ -239,13 +492,7 @@ def login_verify():
         }
     })
 
-    response.set_cookie(
-        "token",
-        token,
-        httponly=True,
-        samesite="Lax",
-        secure=False
-    )
+    set_auth_cookie(response, token)
 
     return response
 
@@ -254,94 +501,80 @@ def login_verify():
 # CHECK SESSION (/me)
 # -----------------------------------
 @app.route("/me", methods=["GET"])
+@login_required
 def get_me():
 
-    token = request.cookies.get("token")
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
 
-    if not token:
+    cursor.execute(
+        """
+        SELECT
+            id,
+            name,
+            email,
+            created_at
+        FROM users
+        WHERE email=%s
+        """,
+        (g.current_user_email,)
+    )
+
+    user = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    if not user:
         return jsonify({
-            "message": "Unauthorized"
-        }), 401
+            "message": "User not found"
+        }), 404
 
-    try:
+    admin_email = os.getenv("ADMIN_EMAIL")
+    is_admin = user.get("email") == admin_email
 
-        decoded = jwt.decode(
-            token,
-            JWT_SECRET,
-            algorithms=["HS256"]
-        )
-
-        email = decoded.get("email")
-
-        if not email:
-            return jsonify({
-                "message": "Invalid token"
-            }), 401
-
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-
-        cursor.execute(
-            """
-            SELECT
-                id,
-                name,
-                email,
-                created_at
-            FROM users
-            WHERE email=%s
-            """,
-            (email,)
-        )
-
-        user = cursor.fetchone()
-
-        cursor.close()
-        conn.close()
-
-        if not user:
-            return jsonify({
-                "message": "User not found"
-            }), 404
-
-        admin_email = os.getenv("ADMIN_EMAIL")
-        is_admin = user.get("email") == admin_email
-
-        return jsonify({
-            "user": {
-                "id": user.get("id"),
-                "name": user.get("name"),
-                "email": user.get("email"),
-                "created_at": user.get("created_at"),
-            },
-            "is_admin": is_admin
-        })
-
-    except jwt.ExpiredSignatureError:
-
-        return jsonify({
-            "message": "Token expired"
-        }), 401
-
-    except Exception as e:
-
-        print("Error:", e)
-
-        return jsonify({
-            "message": "Invalid token"
-        }), 401
-
+    return jsonify({
+        "user": {
+            "id": user.get("id"),
+            "name": user.get("name"),
+            "email": user.get("email"),
+            "created_at": user.get("created_at"),
+        },
+        "is_admin": is_admin
+    })
 
 
 # -----------------------------------
 # SEND SNAPSHOT EMAIL
 # -----------------------------------
 @app.route("/send_snapshot_email", methods=["POST"])
+@limiter.limit("10 per hour")
 def send_snapshot_email():
 
     try:
 
         print("📸 Snapshot endpoint triggered")
+
+        security_token = request.form.get("security_token")
+        raw_email = request.form.get("email", "Unknown")
+        attempted_email = (
+            normalize_email(raw_email)
+            if raw_email and raw_email != "Unknown"
+            else raw_email
+        )
+
+        valid, error_msg, _ = validate_one_time_token(
+            security_token,
+            "security_snapshot",
+            expected_email=attempted_email if attempted_email != "Unknown" else None,
+            consume=True
+        )
+
+        if not valid:
+            return jsonify({
+                "success": False,
+                "message": error_msg or "Unauthorized snapshot request"
+            }), 401
 
         if "snapshot" not in request.files:
             return jsonify({
@@ -361,12 +594,6 @@ def send_snapshot_email():
 
         # SECURITY ALERT EMAIL
         admin_email = os.getenv("SECURITY_ALERT_EMAIL")
-
-        # ATTEMPTED LOGIN EMAIL
-        attempted_email = request.form.get(
-            "email",
-            "Unknown"
-        )
 
         timestamp = datetime.now().strftime(
             "%Y-%m-%d %H:%M:%S"
@@ -482,9 +709,10 @@ This is an automated security alert from SecureAuth.
 # SEND OTP
 # -----------------------------------
 @app.route("/send_otp", methods=["POST"])
+@limiter.limit("3 per 5 minutes")
 def send_otp():
 
-    data = request.get_json()
+    data = request.get_json() or {}
 
     email = data.get("email")
 
@@ -513,7 +741,7 @@ def send_otp():
         bcrypt.gensalt()
     ).decode()
 
-    expires_at = datetime.utcnow() + timedelta(minutes=10)
+    expires_at = utc_expires(10)
 
     # STORE OTP
     cursor.execute(
@@ -522,7 +750,7 @@ def send_otp():
         (email, otp_hash, expires_at)
         VALUES (%s, %s, %s)
         """,
-        (email, otp_hash, expires_at)
+        (normalize_email(email), otp_hash, expires_at)
     )
 
     conn.commit()
@@ -583,9 +811,10 @@ Do not share this OTP.
 # VERIFY OTP
 # -----------------------------------
 @app.route("/verify_otp", methods=["POST"])
+@limiter.limit("5 per 10 minutes")
 def verify_otp():
 
-    data = request.get_json()
+    data = request.get_json() or {}
 
     email = data.get("email")
     otp = data.get("otp")
@@ -624,7 +853,7 @@ def verify_otp():
         }), 400
 
     # CHECK EXPIRY
-    if datetime.utcnow() > otp_record["expires_at"]:
+    if utc_now() > as_utc_naive(otp_record["expires_at"]):
 
         cursor.close()
         conn.close()
@@ -659,9 +888,16 @@ def verify_otp():
     cursor.close()
     conn.close()
 
+    reset_token = generate_one_time_token(
+        email,
+        "password_reset",
+        expiry_minutes=10
+    )
+
     return jsonify({
         "success": True,
-        "message": "OTP verified"
+        "message": "OTP verified",
+        "reset_token": reset_token
     }), 200
 
 
@@ -669,18 +905,39 @@ def verify_otp():
 # RESET PASSWORD
 # -----------------------------------
 @app.route("/reset_password", methods=["POST"])
+@limiter.limit("3 per 10 minutes")
 def reset_password():
 
-    data = request.get_json()
+    data = request.get_json() or {}
 
     email = data.get("email")
     new_password = data.get("password")
+    reset_token = data.get("reset_token")
 
-    if not email or not new_password:
+    if not email or not new_password or not reset_token:
         return jsonify({
             "success": False,
-            "message": "Email and password required"
+            "message": "Email, password, and reset_token are required"
         }), 400
+
+    if len(new_password) < 8:
+        return jsonify({
+            "success": False,
+            "message": "Password must be at least 8 characters"
+        }), 400
+
+    valid, error_msg, jti = validate_one_time_token(
+        reset_token,
+        "password_reset",
+        expected_email=email,
+        consume=False
+    )
+
+    if not valid:
+        return jsonify({
+            "success": False,
+            "message": error_msg or "Invalid or expired reset token"
+        }), 401
 
     hashed_password = bcrypt.hashpw(
         new_password.encode("utf-8"),
@@ -711,6 +968,8 @@ def reset_password():
 
     conn.commit()
 
+    consume_one_time_token(jti)
+
     cursor.close()
     conn.close()
 
@@ -730,11 +989,7 @@ def logout():
         "message": "Logged out"
     })
 
-    response.set_cookie(
-        "token",
-        "",
-        expires=0
-    )
+    clear_auth_cookie(response)
 
     return response
 
@@ -743,42 +998,14 @@ def logout():
 # LOGIN HISTORY
 # -----------------------------------
 @app.route("/login_history", methods=["GET"])
+@login_required
 def login_history():
-
-    token = request.cookies.get("token")
-
-    if not token:
-        return jsonify({
-            "message": "Unauthorized"
-        }), 401
-
-    try:
-
-        decoded = jwt.decode(
-            token,
-            JWT_SECRET,
-            algorithms=["HS256"]
-        )
-
-        email = decoded.get("email")
-        if not email:
-            return jsonify({
-                "message": "Invalid token"
-            }), 401
-
-    except Exception as e:
-
-        print("Error:", e)
-
-        return jsonify({
-            "message": "Invalid token"
-        }), 401
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
     admin_email = os.getenv("ADMIN_EMAIL")
-    is_admin = email == admin_email
+    is_admin = g.current_user_email == admin_email
 
     # Admin-only global endpoint
     # Even if someone manually calls /login_history?admin=1, it must be authenticated + admin.
@@ -797,6 +1024,8 @@ def login_history():
             """
         )
     elif request.args.get("admin") == "1" and not is_admin:
+        cursor.close()
+        conn.close()
         return jsonify({
             "success": False,
             "message": "Unauthorized"
@@ -815,10 +1044,8 @@ def login_history():
             ORDER BY login_time DESC
             LIMIT 10
             """,
-            (email,)
+            (g.current_user_email,)
         )
-
-
 
     records = cursor.fetchall()
 
@@ -853,4 +1080,3 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=5000
     )
-

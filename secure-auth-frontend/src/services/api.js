@@ -42,8 +42,11 @@ api.interceptors.response.use(
 
 // 🔐 AUTH APIs
 export const authAPI = {
-  // Login
-  login: (data) => api.post(API_ENDPOINTS.login, data),
+  // Login — treat 401 as a normal failed-login response (includes security_token)
+  login: (data) =>
+    api.post(API_ENDPOINTS.login, data, {
+      validateStatus: (status) => status === 200 || status === 401,
+    }),
 
   // Register
   register: (data) => api.post(API_ENDPOINTS.register, data),

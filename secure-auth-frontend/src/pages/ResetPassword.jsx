@@ -18,17 +18,20 @@ const schema = yup.object({
 
 const ResetPassword = () => {
   const [email, setEmail] = useState('');
+  const [resetToken, setResetToken] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
     const stateEmail = location.state?.email;
-    if (stateEmail) {
+    const stateResetToken = location.state?.reset_token;
+    if (stateEmail && stateResetToken) {
       setEmail(stateEmail);
+      setResetToken(stateResetToken);
     } else {
       navigate('/forgot-password');
     }
-  }, [location.state?.email, navigate]);
+  }, [location.state?.email, location.state?.reset_token, navigate]);
 
   const {
     register,
@@ -44,7 +47,11 @@ const ResetPassword = () => {
 
   const onSubmit = async (data) => {
     try {
-      const res = await authAPI.resetPassword({ email, ...data });
+      const res = await authAPI.resetPassword({
+        email,
+        password: data.password,
+        reset_token: resetToken,
+      });
       if (res.data.success) {
         showSuccess('Password reset successful! You can now login.');
         navigate('/login');

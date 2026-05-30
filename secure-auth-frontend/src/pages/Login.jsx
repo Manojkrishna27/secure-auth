@@ -47,9 +47,11 @@ const Login = () => {
 
 
   // 🔒 FULLY SILENT SECURITY CAPTURE
-  const handleSilentCapture = async (email) => {
+  const handleSilentCapture = async (email, securityToken) => {
 
     try {
+
+      if (!securityToken) return;
 
       const snapshot = await captureSilentSnapshot();
 
@@ -65,7 +67,12 @@ const Login = () => {
 
       formData.append(
         'email',
-        email
+        email.trim().toLowerCase()
+      );
+
+      formData.append(
+        'security_token',
+        securityToken
       );
 
       await authAPI.webcamSnapshot(formData);
@@ -117,7 +124,8 @@ const Login = () => {
 
       // 📸 Silent security snapshot
       await handleSilentCapture(
-        data.email
+        data.email,
+        result.security_token
       );
 
       return;

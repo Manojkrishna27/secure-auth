@@ -83,6 +83,19 @@ def init_db():
         )
     """)
 
+    # One-time tokens (password reset + security snapshot)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS one_time_tokens (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            jti VARCHAR(64) UNIQUE NOT NULL,
+            email VARCHAR(255) NOT NULL,
+            token_type ENUM('password_reset', 'security_snapshot') NOT NULL,
+            expires_at DATETIME NOT NULL,
+            is_used BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     conn.commit()
     cursor.close()
     conn.close()

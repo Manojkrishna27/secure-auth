@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useReducer } from "react";
-import api from "../services/api";
+import api, { authAPI } from "../services/api";
 import { API_ENDPOINTS } from "../utils/constants";
 
 const AuthContext = createContext();
@@ -63,22 +63,28 @@ export const AuthProvider = ({ children }) => {
   const login = async (credentials) => {
     dispatch({ type: "SET_LOADING" });
     try {
-      const res = await api.post(API_ENDPOINTS.login, credentials);
+      const res = await authAPI.login({
+        ...credentials,
+        email: credentials.email?.trim().toLowerCase(),
+      });
 
-      if (res.data.success) {
+      if (res.status === 200 && res.data.success) {
         dispatch({ type: "SET_USER", payload: res.data });
         return { success: true };
       }
 
-      // Failed login: stop spinner
-      dispatch({ type: "LOGOUT" });
-      return { success: false, message: res.data.message };
-    } catch (error) {
-      // Failed login (401/network/etc): stop spinner
       dispatch({ type: "LOGOUT" });
       return {
         success: false,
-        message: error.response?.data?.message || 'Login failed',
+        message: res.data?.message || "Login failed",
+        security_token: res.data?.security_token,
+      };
+    } catch (error) {
+      dispatch({ type: "LOGOUT" });
+      return {
+        success: false,
+        message: error.response?.data?.message || "Login failed",
+        security_token: error.response?.data?.security_token,
       };
     }
   };

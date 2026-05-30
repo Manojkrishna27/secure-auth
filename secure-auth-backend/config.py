@@ -10,6 +10,9 @@ DB_NAME = os.getenv("DB_NAME", "secureauth")
 
 JWT_SECRET = os.getenv("JWT_SECRET", "supersecretkey-changeinprod")
 
+FLASK_ENV = os.getenv("FLASK_ENV", "development")
+COOKIE_SECURE = FLASK_ENV == "production"
+
 SMTP_USER = os.getenv("EMAIL_USER")
 SMTP_PASS = os.getenv("EMAIL_PASS")
 
