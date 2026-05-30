@@ -265,7 +265,7 @@ def admin_required(f):
     @login_required
     def decorated(*args, **kwargs):
         admin_email = os.getenv("ADMIN_EMAIL")
-        if g.current_user_email != admin_email:
+        if not admin_email or normalize_email(g.current_user_email) != normalize_email(admin_email):
             return jsonify({
                 "success": False,
                 "message": "Unauthorized"
@@ -531,7 +531,11 @@ def get_me():
         }), 404
 
     admin_email = os.getenv("ADMIN_EMAIL")
-    is_admin = user.get("email") == admin_email
+    is_admin = (
+        normalize_email(user.get("email")) == normalize_email(admin_email)
+        if admin_email
+        else False
+    )
 
     return jsonify({
         "user": {
@@ -1005,7 +1009,11 @@ def login_history():
     cursor = conn.cursor(dictionary=True)
 
     admin_email = os.getenv("ADMIN_EMAIL")
-    is_admin = g.current_user_email == admin_email
+    is_admin = (
+        normalize_email(g.current_user_email) == normalize_email(admin_email)
+        if admin_email
+        else False
+    )
 
     # Admin-only global endpoint
     # Even if someone manually calls /login_history?admin=1, it must be authenticated + admin.
@@ -1060,6 +1068,138 @@ def login_history():
             record["login_time"] = record[
                 "login_time"
             ].strftime("%Y-%m-%d %H:%M:%S")
+
+    return jsonify({
+        "history": records
+    }), 200
+
+
+# -----------------------------------
+# ADMIN HELPERS
+# -----------------------------------
+def format_datetime_fields(records, fields):
+    for record in records:
+        for field in fields:
+            if record.get(field):
+                record[field] = record[field].strftime("%Y-%m-%d %H:%M:%S")
+    return records
+
+
+# -----------------------------------
+# ADMIN STATS
+# -----------------------------------
+@app.route("/admin/stats", methods=["GET"])
+@admin_required
+@limiter.limit("30 per minute")
+def admin_stats():
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT COUNT(*) AS total_users FROM users")
+    total_users = cursor.fetchone()["total_users"]
+
+    cursor.execute("SELECT COUNT(*) AS total_logins FROM login_history")
+    total_logins = cursor.fetchone()["total_logins"]
+
+    cursor.execute(
+        """
+        SELECT COUNT(*) AS successful_logins
+        FROM login_history
+        WHERE status = 'SUCCESS'
+        """
+    )
+    successful_logins = cursor.fetchone()["successful_logins"]
+
+    cursor.execute(
+        """
+        SELECT COUNT(*) AS failed_logins
+        FROM login_history
+        WHERE status = 'FAILED'
+        """
+    )
+    failed_logins = cursor.fetchone()["failed_logins"]
+
+    cursor.close()
+    conn.close()
+
+    if total_logins > 0:
+        success_rate = round((successful_logins / total_logins) * 100, 2)
+    else:
+        success_rate = 0.0
+
+    return jsonify({
+        "total_users": total_users,
+        "total_logins": total_logins,
+        "successful_logins": successful_logins,
+        "failed_logins": failed_logins,
+        "success_rate": success_rate
+    }), 200
+
+
+# -----------------------------------
+# ADMIN REGISTRATIONS
+# -----------------------------------
+@app.route("/admin/registrations", methods=["GET"])
+@admin_required
+@limiter.limit("30 per minute")
+def admin_registrations():
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        """
+        SELECT name, email, created_at
+        FROM users
+        ORDER BY created_at DESC
+        LIMIT 10
+        """
+    )
+
+    records = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    format_datetime_fields(records, ["created_at"])
+
+    return jsonify({
+        "registrations": records
+    }), 200
+
+
+# -----------------------------------
+# ADMIN LOGIN HISTORY
+# -----------------------------------
+@app.route("/admin/login-history", methods=["GET"])
+@admin_required
+@limiter.limit("30 per minute")
+def admin_login_history():
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        """
+        SELECT
+            email,
+            login_time,
+            status,
+            ip_address,
+            user_agent
+        FROM login_history
+        ORDER BY login_time DESC
+        LIMIT 10
+        """
+    )
+
+    records = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    format_datetime_fields(records, ["login_time"])
 
     return jsonify({
         "history": records

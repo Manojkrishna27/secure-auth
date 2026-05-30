@@ -86,6 +86,11 @@ export const authAPI = {
 
   // 📊 Login History
   loginHistory: (params) => api.get(API_ENDPOINTS.loginHistory, { params }),
+
+  // Admin
+  adminStats: () => api.get(API_ENDPOINTS.adminStats),
+  adminRegistrations: () => api.get(API_ENDPOINTS.adminRegistrations),
+  adminLoginHistory: () => api.get(API_ENDPOINTS.adminLoginHistory),
 };
 
 export default api;

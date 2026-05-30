@@ -68,7 +68,7 @@ const Dashboard = () => {
 {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
 
-            {/* Account */}
+            {/* Username */}
             <div className="bg-white/70 backdrop-blur-xl rounded-3xl p-8 border border-white/50 shadow-2xl hover:shadow-3xl transition-all duration-300 hover:-translate-y-2">
               <div className="flex items-center">
                 <div className="p-3 bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-2xl">
@@ -76,10 +76,10 @@ const Dashboard = () => {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">
-                    Account
+                    Username
                   </p>
                   <p className="text-3xl font-bold text-gray-900">
-                    {user?.name || user?.email || 'User'}
+                    {user?.email?.split('@')[0] || 'User'}
                   </p>
                 </div>
               </div>

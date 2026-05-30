@@ -28,8 +28,8 @@ const Navbar = () => {
             </span>
           </Link>
 
-          {/* Navigation Links - Only show when logged in */}
-          {user && is_admin === true && (
+          {/* Navigation Links - show when logged in */}
+          {user && (
             <div className="flex items-center space-x-2">
               <Link
                 to="/dashboard"
@@ -42,17 +42,19 @@ const Navbar = () => {
                 <LayoutDashboard className="w-4 h-4" />
                 <span>Dashboard</span>
               </Link>
-              <Link
-                to="/admin"
-                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  isActive('/admin')
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                <Shield className="w-4 h-4" />
-                <span>Admin</span>
-              </Link>
+              {is_admin === true && (
+                <Link
+                  to="/admin"
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                    isActive('/admin')
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <Shield className="w-4 h-4" />
+                  <span>Admin</span>
+                </Link>
+              )}
             </div>
           )}
 

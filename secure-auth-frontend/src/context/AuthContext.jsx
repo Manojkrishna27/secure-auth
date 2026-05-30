@@ -69,8 +69,12 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (res.status === 200 && res.data.success) {
-        dispatch({ type: "SET_USER", payload: res.data });
-        return { success: true };
+        const meRes = await api.get(API_ENDPOINTS.me);
+        dispatch({ type: "SET_USER", payload: meRes.data });
+        return {
+          success: true,
+          is_admin: meRes.data.is_admin === true,
+        };
       }
 
       dispatch({ type: "LOGOUT" });

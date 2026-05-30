@@ -12,7 +12,10 @@ export const API_ENDPOINTS = {
   webcamSnapshot: '/send_snapshot_email',
   dashboard: '/user/dashboard',
   me: '/me',
-  loginHistory: '/login_history'
+  loginHistory: '/login_history',
+  adminStats: '/admin/stats',
+  adminRegistrations: '/admin/registrations',
+  adminLoginHistory: '/admin/login-history',
 };
 
 // Messages
