@@ -10,9 +10,9 @@ from http.cookiejar import MozillaCookieJar
 from urllib.request import Request, urlopen
 import urllib.error
 
-BASE = "http://localhost:5000"
+BASE = os.getenv("TEST_BACKEND_URL", "http://localhost:8081")
 REPORT = []
-EVIDENCE_DIR = "/home/mk/Documents/New Cicada_404/test_evidence"
+EVIDENCE_DIR = "/home/mk/Documents/New_Cicada_404/test_evidence"
 os.makedirs(EVIDENCE_DIR, exist_ok=True)
 
 

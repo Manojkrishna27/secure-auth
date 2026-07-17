@@ -1,30 +1,51 @@
 import time
+import logging
 import mysql.connector
+from mysql.connector import pooling
 from config import DB_HOST, DB_USER, DB_PASSWORD, DB_NAME
 
+logger = logging.getLogger("secureauth.db")
 
-def get_db_connection():
+# -----------------------------------
+# CONNECTION POOL
+# -----------------------------------
+_pool = None
+
+
+def _get_pool():
+    """Lazily initialize the connection pool with retry logic."""
+    global _pool
+    if _pool is not None:
+        return _pool
+
     retries = 10
-
     for attempt in range(retries):
         try:
-            conn = mysql.connector.connect(
+            _pool = pooling.MySQLConnectionPool(
+                pool_name="secureauth_pool",
+                pool_size=10,
+                pool_reset_session=True,
                 host=DB_HOST,
                 user=DB_USER,
                 password=DB_PASSWORD,
-                database=DB_NAME
+                database=DB_NAME,
             )
-
-            print("✅ Connected to MySQL")
-            return conn
-
+            logger.info("MySQL connection pool created (size=10)")
+            return _pool
         except mysql.connector.Error as e:
-            print(f"⏳ Waiting for MySQL... Attempt {attempt + 1}/{retries}")
-            print("Error:", e)
-
+            logger.warning(
+                "Waiting for MySQL... Attempt %d/%d — %s",
+                attempt + 1, retries, e
+            )
             time.sleep(5)
 
-    raise Exception("❌ Could not connect to MySQL after multiple retries")
+    raise Exception("Could not connect to MySQL after multiple retries")
+
+
+def get_db_connection():
+    """Get a connection from the pool."""
+    pool = _get_pool()
+    return pool.get_connection()
 
 
 def init_db():
@@ -100,4 +121,4 @@ def init_db():
     cursor.close()
     conn.close()
 
-    print("✅ Database tables initialized")
+    logger.info("Database tables initialized")

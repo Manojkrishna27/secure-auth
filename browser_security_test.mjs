@@ -5,9 +5,9 @@ import { chromium } from 'playwright';
 import fs from 'fs';
 import path from 'path';
 
-const EVIDENCE = '/home/mk/Documents/New Cicada_404/test_evidence';
-const FRONTEND = 'http://localhost:3000';
-const BACKEND = 'http://localhost:5000';
+const EVIDENCE = '/home/mk/Documents/New_Cicada_404/test_evidence';
+const FRONTEND = process.env.TEST_FRONTEND_URL || 'http://localhost:8080';
+const BACKEND = process.env.TEST_BACKEND_URL || 'http://localhost:8081';
 const results = [];
 
 function record(section, msg, status = 'INFO', data = null) {

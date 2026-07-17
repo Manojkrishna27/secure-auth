@@ -1,4 +1,4 @@
-import { toast, ToastContainer, Flip, Zoom, Slide } from 'react-toastify';
+import { toast, ToastContainer, Slide } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 // Custom toast config

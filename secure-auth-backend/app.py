@@ -7,6 +7,7 @@ import jwt
 import secrets
 import smtplib
 import os
+import logging
 from functools import wraps
 
 from email.mime.text import MIMEText
@@ -17,6 +18,16 @@ from datetime import datetime, timedelta, timezone
 
 from db import get_db_connection, init_db
 from config import JWT_SECRET, SMTP_USER, SMTP_PASS, COOKIE_SECURE
+
+
+# -----------------------------------
+# LOGGING
+# -----------------------------------
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+logger = logging.getLogger("secureauth")
 
 
 # -----------------------------------
@@ -73,15 +84,16 @@ def encode_jwt(payload):
 # -----------------------------------
 app = Flask(__name__)
 
-# Enable CORS
-CORS(app, supports_credentials=True)
+# Enable CORS — restrict origins in production
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")]
+CORS(app, supports_credentials=True, origins=ALLOWED_ORIGINS)
 
-# Rate limiting
+# Rate limiting — use Redis in production for multi-worker support
 limiter = Limiter(
     key_func=get_remote_address,
     app=app,
     default_limits=[],
-    storage_uri="memory://"
+    storage_uri=os.getenv("RATE_LIMIT_STORAGE", "memory://")
 )
 
 
@@ -252,7 +264,7 @@ def login_required(f):
             return jsonify({"message": "Token expired"}), 401
 
         except Exception as e:
-            print("Error:", e)
+            logger.error("JWT decode error: %s", e)
             return jsonify({"message": "Invalid token"}), 401
 
         return f(*args, **kwargs)
@@ -557,7 +569,7 @@ def send_snapshot_email():
 
     try:
 
-        print("📸 Snapshot endpoint triggered")
+        logger.info("Snapshot endpoint triggered")
 
         security_token = request.form.get("security_token")
         raw_email = request.form.get("email", "Unknown")
@@ -616,7 +628,7 @@ def send_snapshot_email():
         # CHECK CONFIG
         if not admin_email:
 
-            print("⚠️ SECURITY_ALERT_EMAIL not configured")
+            logger.warning("SECURITY_ALERT_EMAIL not configured")
 
             return jsonify({
                 "success": True,
@@ -625,7 +637,7 @@ def send_snapshot_email():
 
         if not smtp_user or not smtp_pass:
 
-            print("⚠️ SMTP credentials missing")
+            logger.warning("SMTP credentials missing")
 
             return jsonify({
                 "success": True,
@@ -678,7 +690,7 @@ This is an automated security alert from SecureAuth.
 
         msg.attach(image)
 
-        print("📧 Sending security alert email...")
+        logger.info("Sending security alert email...")
 
         # SEND EMAIL
         with smtplib.SMTP("smtp.gmail.com", 587) as server:
@@ -692,7 +704,7 @@ This is an automated security alert from SecureAuth.
 
             server.send_message(msg)
 
-        print("✅ Security alert email sent successfully")
+        logger.info("Security alert email sent successfully")
 
         return jsonify({
             "success": True,
@@ -701,7 +713,7 @@ This is an automated security alert from SecureAuth.
 
     except Exception as e:
 
-        print("❌ Email send error:", e)
+        logger.error("Email send error: %s", e)
 
         return jsonify({
             "success": True,
@@ -781,16 +793,26 @@ Do not share this OTP.
         msg["From"] = smtp_user
         msg["To"] = email
 
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+        try:
+            with smtplib.SMTP("smtp.gmail.com", 587) as server:
 
-            server.starttls()
+                server.starttls()
 
-            server.login(
-                smtp_user,
-                smtp_pass
-            )
+                server.login(
+                    smtp_user,
+                    smtp_pass
+                )
 
-            server.send_message(msg)
+                server.send_message(msg)
+
+        except Exception as smtp_err:
+            logger.error("SMTP error in send_otp: %s", smtp_err)
+            cursor.close()
+            conn.close()
+            return jsonify({
+                "success": False,
+                "message": "Failed to send OTP email. Please try again."
+            }), 500
 
         cursor.close()
         conn.close()
@@ -1207,13 +1229,40 @@ def admin_login_history():
 
 
 # -----------------------------------
-# RUN SERVER
+# HEALTH CHECK (for Docker / platform monitoring)
+# -----------------------------------
+@app.route("/health")
+def health():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return jsonify({"status": "healthy"}), 200
+    except Exception:
+        return jsonify({"status": "unhealthy"}), 503
+
+
+# -----------------------------------
+# INITIALIZE DATABASE
+# -----------------------------------
+# Run init_db() at module level so Gunicorn workers pick it up.
+# The guard prevents running during import-only scenarios.
+try:
+    init_db()
+    logger.info("Database tables initialized")
+except Exception as e:
+    logger.warning("Could not initialize DB at startup (will retry on first request): %s", e)
+
+
+# -----------------------------------
+# RUN SERVER (development only)
 # -----------------------------------
 if __name__ == "__main__":
 
-    init_db()
-
-    print("🚀 SecureAuth Backend Started")
+    logger.info("SecureAuth Backend Started (dev mode)")
 
     app.run(
         debug=False,

@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import ToastProvider from './components/ToastProvider';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
+import AdminRoute from './components/AdminRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
@@ -47,9 +48,9 @@ const noNavbar = ['/', '/login', '/register', '/forgot-password', '/verify-otp',
             <Route 
               path="/admin" 
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <Admin />
-                </ProtectedRoute>
+                </AdminRoute>
               } 
             />
             <Route path="*" element={<Login />} />

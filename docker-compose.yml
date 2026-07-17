@@ -10,13 +10,26 @@ services:
 
     environment:
       DB_HOST: mysql
+      ALLOWED_ORIGINS: http://localhost:8080
+      RATE_LIMIT_STORAGE: redis://redis:6379
 
     ports:
-      - "5000:5000"
+      - "8081:5000"
 
     depends_on:
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_started
+
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    restart: unless-stopped
 
     networks:
       - secure-auth
@@ -24,17 +37,19 @@ services:
   frontend:
     build:
       context: ./secure-auth-frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8081}
 
     container_name: secure-auth-frontend
 
-    environment:
-      REACT_APP_API_URL: http://backend:5000
-
     ports:
-      - "3000:3000"
+      - "8080:80"
 
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+
+    restart: unless-stopped
 
     networks:
       - secure-auth
@@ -52,8 +67,9 @@ services:
       MYSQL_DATABASE: secure_auth
       MYSQL_ROOT_PASSWORD: root123
 
-    ports:
-      - "3307:3306"
+    # MySQL is only accessible within the Docker network (not exposed to host)
+    expose:
+      - "3306"
 
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
@@ -63,6 +79,19 @@ services:
 
     volumes:
       - secureauth-mysql-data:/var/lib/mysql
+
+    networks:
+      - secure-auth
+
+  redis:
+    image: redis:7-alpine
+
+    container_name: secure-auth-redis
+
+    restart: unless-stopped
+
+    expose:
+      - "6379"
 
     networks:
       - secure-auth

@@ -60,8 +60,8 @@ const Dashboard = () => {
             <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-4">
               Dashboard
             </h1>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Welcome back, {user?.email}! 👋
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto flex items-center justify-center gap-1.5 flex-wrap">
+              Welcome back, <span className="font-semibold text-gray-900 bg-white/80 px-3 py-0.5 rounded-2xl border border-gray-200/60 shadow-sm">{user?.email}</span>! 👋
             </p>
           </div>
 
@@ -79,7 +79,7 @@ const Dashboard = () => {
                     Username
                   </p>
                   <p className="text-3xl font-bold text-gray-900">
-                    {user?.email?.split('@')[0] || 'User'}
+                    {user?.name || 'User'}
                   </p>
                 </div>
               </div>
@@ -128,7 +128,11 @@ const Dashboard = () => {
                   </p>
                   <p className="text-3xl font-bold text-gray-900">
                     {user?.created_at
-                      ? `Joined ${new Date(user.created_at).toLocaleString('en-US', { month: 'short', year: 'numeric' }).replace(' ', ' ')}`
+                      ? (() => {
+                          const date = new Date(user.created_at);
+                          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                          return `Joined ${months[date.getMonth()]} ${date.getFullYear()}`;
+                        })()
                       : 'Joined'}
                   </p>
                 </div>

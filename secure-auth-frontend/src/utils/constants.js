@@ -1,5 +1,5 @@
-// API Endpoints
-export const API_BASE_URL = 'http://localhost:5000';
+// API Endpoints — injected at build time via VITE_API_BASE_URL
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8081';
 
 
 // Auth Endpoints

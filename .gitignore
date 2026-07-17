@@ -70,3 +70,9 @@ snapshots/
 coverage/
 *.log__pycache__/
 *.pyc
+
+# Local development MySQL & logs
+local_mysql/
+local_mysql_bin/
+services.log
+test_evidence/
